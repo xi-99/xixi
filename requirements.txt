@@ -1,0 +1,7 @@
+# WORLD3 数字生命沙盒实验平台依赖
+# 安装：pip install -r requirements.txt （Python 3.9+）
+streamlit>=1.33
+numpy>=1.24
+matplotlib>=3.7
+pandas>=2.0
+zstandard>=0.22

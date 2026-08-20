@@ -1,0 +1,31 @@
+# ===== Python =====
+__pycache__/
+pycache/
+*.pyc
+
+# ===== 日志与临时文件 =====
+*.log
+*.tmp
+
+# ===== 环境 / 密钥 =====
+.env
+venv/
+.venv/
+.streamlit/secrets.toml
+
+# ===== 本地数据库（启动时自动重建，不入库）=====
+data/.db
+data/*.db
+
+# ===== 实验输出（main.py / tune.py 生成的报告）=====
+results/
+
+# ===== 截图（README 引用，待添加）=====
+screenshots/*
+!screenshots/.gitkeep
+
+# ===== Obsidian 本地配置 =====
+.obsidian/
+
+# ===== 保留空目录 =====
+!.gitkeep
