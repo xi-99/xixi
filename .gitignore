@@ -29,3 +29,12 @@ screenshots/*
 
 # ===== 保留空目录 =====
 !.gitkeep
+
+# ===== 临时测试脚本（开发期间产生的验证脚本，不入库）=====
+test_dual_scan_e2e.py
+test_safety_guard.py
+test_scan_dual.py
+
+# ===== MCP / IDE 本地缓存 =====
+.trae-cn/
+.mcp/

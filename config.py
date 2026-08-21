@@ -1,8 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-WORLD3/config.py —— 全部参数集中于此，调参只改这里。
-实验哲学：能量严格守恒，世界不创造也不消灭能量，只搬家。
+⚠️⚠️⚠️  本文件已废弃（DEPRECATED）  ⚠️⚠️⚠️
+
+WORLD3/config.py —— 【已废弃】旧命令行引擎的集中参数文件。
+
+自 v2.1 起：
+  - 本文件的全部参数值已合并进 app.py 的 PARAM_SPECS（Web 控制台唯一调参入口）；
+  - 新引擎（world_engine.py + plugins/）统一从 params 字典读取参数；
+  - 仅 main.py / tune.py / world.py 组成的旧实验链路仍引用本文件，
+    该链路同样已标记废弃，仅供历史复现。
+
+请使用 Web 控制台（python -m streamlit run app.py）进行实验与调参。
 """
+import warnings
+
+warnings.warn(
+    'config.py 已废弃：全部参数已合并至 app.py 的 PARAM_SPECS，'
+    '请改用 Web 控制台（streamlit run app.py）调参。',
+    DeprecationWarning, stacklevel=2)
 
 # ===== 空间 =====
 GRID = 128                 # 128×128 二维网格（环形边界，上下左右无缝）

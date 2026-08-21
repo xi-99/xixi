@@ -1,21 +1,36 @@
 # -*- coding: utf-8 -*-
 """
-WORLD3/tune.py —— 调参扫描器：快速寻找"犹豫会死、决心能活"的参数窗口。
-每组候选在 5000 tick 上跑 犹豫型(p=1.0) 和 决心型(p=0.0)，对比存活率。
+⚠️⚠️⚠️  本文件已废弃（DEPRECATED）  ⚠️⚠️⚠️
 
-用法：
+WORLD3/tune.py —— 【已废弃】旧命令行调参扫描器。
+
+自 v2.1 起：
+  - 全部参数已合并进 app.py 的 PARAM_SPECS；
+  - 调参扫描请使用 Web 控制台（python -m streamlit run app.py）的
+    "自动调参扫描"：自定义步长、多参数联合扫描（散点/热力图/表格）、
+    随机扰动、🔇无渲染后台模式一应俱全；
+  - 本文件使用旧命令行引擎（config.py + world.py + agent.py），
+    保留仅供历史复现，不再维护。
+
+用法（旧，不再推荐）：
     python tune.py                 # 跑内置候选
     python tune.py --ticks 5000    # 自定义时长
 """
 import os
 import sys
 import time
+import warnings
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except Exception:
     pass
+
+warnings.warn(
+    'tune.py 已废弃：请改用 Web 控制台（streamlit run app.py）的'
+    '"自动调参扫描"（支持自定义步长、多参数联合扫描、无渲染后台模式）。',
+    DeprecationWarning, stacklevel=2)
 
 SEED = 42
 TICKS = 5000
@@ -71,6 +86,12 @@ def run_candidate(name, overrides, ticks):
 
 
 def main():
+    print('\n'.join([
+        '⚠️⚠️⚠️  tune.py 已废弃（DEPRECATED）⚠️⚠️⚠️',
+        '    全部参数已合并进 app.py 的 PARAM_SPECS；调参扫描请改用 Web 控制台：',
+        '    python -m streamlit run app.py',
+        '    （其"自动调参扫描"支持自定义步长、多参数联合扫描、🔇无渲染后台模式）',
+        '    本入口仅供历史复现，不再维护。\n']), file=sys.stderr)
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--ticks', type=int, default=TICKS)

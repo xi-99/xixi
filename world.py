@@ -1,13 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-WORLD3/world.py —— 世界：网格、能量守恒、审计、主循环。
+⚠️⚠️⚠️  本文件已废弃（DEPRECATED）  ⚠️⚠️⚠️
+
+WORLD3/world.py —— 【已废弃】旧命令行引擎的世界：网格、能量守恒、审计、主循环。
 守恒法则：能量只搬家，不消失也不凭空出现。每 tick 审计。
+
+自 v2.1 起：
+  - 全部参数已合并进 app.py 的 PARAM_SPECS；
+  - 新引擎为 world_engine.py（微内核 + 插件），由 Web 控制台（app.py）驱动；
+  - 本文件仅被 main.py / tune.py 组成的旧命令行链路引用，仅供历史复现。
+
+请使用 Web 控制台（python -m streamlit run app.py）进行实验。
 """
+import warnings
+
 import numpy as np
 from config import (GRID, INITIAL_AGENTS, TICKS, SEED, OASIS_COUNT, OASIS_RADIUS,
                     OASIS_DENSITY, BASE_CRUMB_PROB, INITIAL_ENERGY_MIN,
                     INITIAL_ENERGY_MAX, DISTRACT_PROB, LOG_EVERY, SNAPSHOT_EVERY)
 from agent import Agent
+
+warnings.warn(
+    'world.py 已废弃：请改用 world_engine.py（微内核 + 插件）与 Web 控制台 app.py。',
+    DeprecationWarning, stacklevel=2)
 
 
 class World:

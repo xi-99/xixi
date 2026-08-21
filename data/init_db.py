@@ -43,13 +43,37 @@ CREATE TABLE IF NOT EXISTS experiments (
 );
 """
 
+# 当前 schema 的完整列集合（与 SCHEMA 保持一致，也是所有 SELECT 的列顺序）。
+# 注意：旧版数据库可能多出遗留列（如 distract_prob 等 NOT NULL 无默认值列，
+# 会导致 INSERT 时 NOT NULL 约束失败），且 ALTER 追加的列位于表物理末尾——
+# 因此读取记录必须按本常量按名解析，绝不能依赖 SELECT * 的物理列顺序。
+COLUMNS = ['id', 'created_at', 'seed', 'map_size', 'agent_count',
+           'move_cost', 'food_energy', 'view_range', 'hesitation_prob',
+           'predator_count', 'attack_power', 'hunger_threshold',
+           'max_ticks', 'end_tick', 'alive_final', 'survival_rate',
+           'peak_alive', 'finish_reason', 'source', 'params_json',
+           'deaths_json', 'diagnosis', 'series']
+
+CURRENT_COLUMNS = COLUMNS
+
 
 def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute(SCHEMA)
-    # 兼容旧库：缺列则 ALTER 补上
+    _repair_schema(conn)
+    conn.commit()
+    return conn
+
+
+def _repair_schema(conn):
+    """数据库 schema 自愈：
+    1. 补缺失列（旧库升级：ALTER ADD 兼容）；
+    2. 删除遗留列（旧库有、当前 schema 无的列——如旧版 distract_prob，
+       它是 NOT NULL 无默认值列，INSERT 不提供值会直接失败，必须删掉）。
+    """
     cols = [r[1] for r in conn.execute('PRAGMA table_info(experiments)')]
+    # ---- 1. 补缺失列 ----
     if 'finish_reason' not in cols:
         conn.execute('ALTER TABLE experiments ADD COLUMN finish_reason TEXT')
     if 'source' not in cols:
@@ -60,8 +84,15 @@ def get_connection():
         conn.execute('ALTER TABLE experiments ADD COLUMN params_json TEXT')
     if 'deaths_json' not in cols:
         conn.execute('ALTER TABLE experiments ADD COLUMN deaths_json TEXT')
-    conn.commit()
-    return conn
+    # ---- 2. 删除遗留列（SQLite 3.35+ 支持 DROP COLUMN）----
+    for c in cols:
+        if c not in CURRENT_COLUMNS:
+            try:
+                conn.execute(f'ALTER TABLE experiments DROP COLUMN {c}')
+            except Exception:
+                # 个别旧库可能因索引/约束无法删除：忽略，仅影响该列读取，
+                # 后续 INSERT 若再受 NOT NULL 阻塞会在保存处给出明确报错
+                pass
 
 
 def save_experiment(params, result):
@@ -117,11 +148,9 @@ def save_experiment(params, result):
         conn.close()
 
 
-def _rec_from_row(conn, row):
-    """行 → 记录 dict（解析 series/params_json/deaths_json）"""
-    cols = [d[0] for d in conn.execute(
-        'SELECT * FROM experiments LIMIT 1').description]
-    rec = dict(zip(cols, row))
+def _rec_from_row(row):
+    """行 → 记录 dict（按 COLUMNS 常量按名解析，避免旧库物理列顺序错位）。"""
+    rec = dict(zip(COLUMNS, row))
     try:
         rec['series'] = json.loads(rec['series'])
     except (ValueError, TypeError):
@@ -144,13 +173,9 @@ def load_experiments():
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT id, created_at, seed, map_size, agent_count, move_cost, "
-            "food_energy, view_range, hesitation_prob, predator_count, attack_power, "
-            "hunger_threshold, max_ticks, end_tick, alive_final, survival_rate, "
-            "peak_alive, finish_reason, source, params_json, deaths_json, "
-            "diagnosis, series "
-            "FROM experiments ORDER BY id DESC").fetchall()
-        return [_rec_from_row(conn, r) for r in rows]
+            f"SELECT {', '.join(COLUMNS)} FROM experiments ORDER BY id DESC"
+        ).fetchall()
+        return [_rec_from_row(r) for r in rows]
     finally:
         conn.close()
 
@@ -160,13 +185,9 @@ def get_experiment(rid):
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT id, created_at, seed, map_size, agent_count, move_cost, "
-            "food_energy, view_range, hesitation_prob, predator_count, attack_power, "
-            "hunger_threshold, max_ticks, end_tick, alive_final, survival_rate, "
-            "peak_alive, finish_reason, source, params_json, deaths_json, "
-            "diagnosis, series "
-            "FROM experiments WHERE id = ?", (int(rid),)).fetchone()
-        return _rec_from_row(conn, row) if row else None
+            f"SELECT {', '.join(COLUMNS)} FROM experiments WHERE id = ?",
+            (int(rid),)).fetchone()
+        return _rec_from_row(row) if row else None
     finally:
         conn.close()
 

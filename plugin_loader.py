@@ -8,7 +8,13 @@ WORLD3/plugin_loader.py —— 插件加载与调度（支持热扫描）。
     on_render(ax, agents, grid) -> None  # 在地图上叠加自定义图形
     ui_controls(world) -> None           # 专属控件（可选）
 
-插件放置于 plugins/ 目录，按文件名排序自动扫描加载。
+插件可选元信息（模块级常量）：
+    DESCRIPTION       描述（无 docstring 时使用）
+    PRIORITY          调度优先级，越小越先执行（默认 0，同优先级按文件名排序）
+    DEFAULT_ENABLED   新会话是否默认启用（默认 True；生态类插件建议 False，
+                      避免改变既有实验的默认行为）
+
+插件放置于 plugins/ 目录，按 (PRIORITY, 文件名) 排序自动扫描加载。
 描述来源优先级：文件头部三引号 docstring > DESCRIPTION 常量 > "无描述"。
 """
 import importlib.util
@@ -25,6 +31,11 @@ class Plugin:
         self.path = path
         self.enabled = True
         self.description = ''
+        self.priority = 0
+        self.default_enabled = True
+        if module is not None:
+            self.priority = int(getattr(module, 'PRIORITY', 0) or 0)
+            self.default_enabled = bool(getattr(module, 'DEFAULT_ENABLED', True))
 
     def register(self, world):
         fn = getattr(self.module, 'register', None)
@@ -56,7 +67,8 @@ def scan_plugins(plugins_dir):
     """
     扫描 plugins/ 目录，加载所有 .py 文件（跳过 _ 开头与 __init__.py，
     __pycache__ 目录天然不参与）。
-    返回 [Plugin, ...]，按文件名排序，保证 on_tick 调用顺序稳定。
+    返回 [Plugin, ...]，按 (PRIORITY, 文件名) 排序，保证 on_tick 调用顺序稳定
+    （PRIORITY 越小的插件越先执行，如 social_ecology 用负优先级抢占行为决策）。
     可重复调用实现热刷新：新增文件会被发现，旧文件以新对象重新加载。
     """
     plugins = []
@@ -84,4 +96,5 @@ def scan_plugins(plugins_dir):
             # 插件加载失败不阻塞内核：包装成空插件并记录错误
             plugins.append(Plugin(name, None, path))
             plugins[-1].description = f'加载失败: {e}'
+    plugins.sort(key=lambda p: (p.priority, p.name))
     return plugins

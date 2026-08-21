@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-WORLD3/main.py —— 实验入口：单跑 / 对照 / 扫描。
+⚠️⚠️⚠️  本文件已废弃（DEPRECATED）  ⚠️⚠️⚠️
+
+WORLD3/main.py —— 【已废弃】旧命令行实验入口：单跑 / 对照 / 扫描。
+
+自 v2.1 起：
+  - 全部参数已合并进 app.py 的 PARAM_SPECS；
+  - 调参与扫描请使用 Web 控制台（python -m streamlit run app.py）
+    的"自动调参扫描"（支持自定义步长、多参数联合扫描、🔇无渲染后台模式）；
+  - 本文件使用旧命令行引擎（config.py + world.py + agent.py），
+    保留仅供历史复现，不再维护。
 
 用法（在 WORLD3 目录下）：
     python main.py --mode smoke                # 快速冒烟（500 tick，验证守恒）
@@ -13,11 +22,17 @@ import argparse
 import os
 import sys
 import time
+import warnings
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import INITIAL_AGENTS, TICKS, SEED, DISTRACT_PROB  # noqa: E402
 from world import World  # noqa: E402
+
+warnings.warn(
+    'main.py 已废弃：请改用 Web 控制台（streamlit run app.py），'
+    '其"自动调参扫描"已支持自定义步长、多参数联合扫描与无渲染后台模式。',
+    DeprecationWarning, stacklevel=2)
 
 RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
 os.makedirs(RESULTS, exist_ok=True)
@@ -161,7 +176,13 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
-    ap = argparse.ArgumentParser(description='WORLD3 决心实验')
+    print('\n'.join([
+        '⚠️⚠️⚠️  main.py 已废弃（DEPRECATED）⚠️⚠️⚠️',
+        '    全部参数已合并进 app.py 的 PARAM_SPECS；调参与扫描请改用 Web 控制台：',
+        '    python -m streamlit run app.py',
+        '    （其"自动调参扫描"支持自定义步长、多参数联合扫描、🔇无渲染后台模式）',
+        '    本入口仅供历史复现，不再维护。\n']), file=sys.stderr)
+    ap = argparse.ArgumentParser(description='WORLD3 决心实验（已废弃）')
     ap.add_argument('--mode', default='compare',
                     choices=['smoke', 'single', 'compare', 'sweep'])
     ap.add_argument('--p', type=float, default=None, help='犹豫旋钮（single 模式用）')

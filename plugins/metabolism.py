@@ -9,8 +9,11 @@ WORLD3/plugins/metabolism.py —— 基础代谢插件。
 
 DESCRIPTION = '基础代谢：走路耗能、吃能量点、能量死亡判定'
 
+# v2.1：config.py 合并后由 params 提供（eat_rate / metabolism / scatter_radius），
+# 以下常量仅作旧参数记录（无这些 key）的兜底
 EAT_RATE = 2.0          # 每 tick 最多进食量
 METABOLISM = 0.1        # 基础代谢 / tick（散落到 1~3 格外）
+SCATTER_RADIUS = 3      # 代谢散落的最大距离（格）
 
 
 def register(world):
@@ -28,7 +31,12 @@ def on_tick(agents, grid):
         if a['kind'] == 'predator':
             a['walked_this_tick'] = False
             continue
-        move_cost = float(a['params']['move_cost'])   # 出生时快照，换代生效
+        # 出生时快照，换代生效
+        p = a['params']
+        move_cost = float(p['move_cost'])
+        eat_rate = float(p.get('eat_rate', EAT_RATE))
+        metab = float(p.get('metabolism', METABOLISM))
+        scatter_r = int(p.get('scatter_radius', SCATTER_RADIUS))
 
         # ---- 1. 走路耗能（散落回离开的格，守恒）----
         if a['walked_this_tick'] and a['last_pos'] is not None:
@@ -37,16 +45,16 @@ def on_tick(agents, grid):
             grid[oy, ox] += move_cost
             a['spent'] += move_cost
 
-        # ---- 2. 基础代谢（散落到 1~3 格外，不能原地自循环）----
-        a['energy'] -= METABOLISM
-        world.scatter(a['x'], a['y'], METABOLISM, radius=3)
-        a['spent'] += METABOLISM
+        # ---- 2. 基础代谢（散落到 1~scatter_r 格外，不能原地自循环）----
+        a['energy'] -= metab
+        world.scatter(a['x'], a['y'], metab, radius=scatter_r)
+        a['spent'] += metab
 
         # ---- 3. 吃脚下能量点（只有绿色觅食者吃）----
         if a['kind'] == 'prey':
             cell = grid[a['y'], a['x']]
             if cell > 0:
-                take = min(cell, EAT_RATE)
+                take = min(cell, eat_rate)
                 grid[a['y'], a['x']] = cell - take
                 a['energy'] += take
                 a['eaten'] += take

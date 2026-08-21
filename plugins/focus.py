@@ -12,6 +12,8 @@ import numpy as np
 
 DESCRIPTION = '决心机制：目标锁定、猎场补位、分心概率'
 
+# v2.1：config.py 合并后由 params 提供（patience_factor / patience_base /
+# wander_persist），以下常量仅作旧参数记录（无这些 key）的兜底
 PATIENCE_FACTOR = 1.5    # 耐心预算 = 初始距离 × 系数 + 常数
 PATIENCE_BASE = 20
 EMERGENCY_DEFAULT = 15.0
@@ -29,12 +31,19 @@ def on_tick(agents, grid):
     for a in agents:
         if not a['alive'] or a['kind'] != 'prey':
             continue
+        # 社会生态插件（social_ecology，PRIORITY 更高）已接管本 tick 决策：
+        # 合作者正在围猎中性生物，决心插件让位，避免一 tick 两动
+        if a.get('social_takeover'):
+            continue
         # 出生时参数快照——换代生效
         p = a['params']
         view_range = int(p['view_range'])
         distract_prob = float(p.get('hesitation_prob', p.get('distract_prob', 0.5)))
         emergency = float(p.get('emergency_energy', EMERGENCY_DEFAULT))
         patch_radius = int(p.get('patch_radius', 3))
+        patience_factor = float(p.get('patience_factor', PATIENCE_FACTOR))
+        patience_base = float(p.get('patience_base', PATIENCE_BASE))
+        wander_persist = int(p.get('wander_persist', WANDER_PERSIST))
         size = world.size
 
         # ---- 1. 目标是否失效？----
@@ -49,7 +58,7 @@ def on_tick(agents, grid):
                 reason = 'eaten'                       # 目标被吃光/消失
             elif a['x'] == tx and a['y'] == ty:
                 reason = 'arrived'                     # 已到达（脚下已吃空）
-            elif a['steps'] > a['init_dist'] * PATIENCE_FACTOR + PATIENCE_BASE:
+            elif a['steps'] > a['init_dist'] * patience_factor + patience_base:
                 reason = 'patience'                    # 耐心耗尽
             elif a['energy'] < emergency:
                 reason = 'emergency'                   # 危急：就近求生
@@ -75,7 +84,7 @@ def on_tick(agents, grid):
         if a['target'] is not None:
             _seek_step(a, grid, rng)
         else:
-            _wander_step(a, grid, rng)
+            _wander_step(a, grid, rng, wander_persist)
 
 
 def _pick_target(agent, grid, view_range, emergency=False):
@@ -162,14 +171,14 @@ def _seek_step(agent, grid, rng):
     agent['last_dist'] = world.dist_xy(agent['x'], agent['y'], tx, ty)
 
 
-def _wander_step(agent, grid, rng):
-    """无目标游荡：保持方向 WANDER_PERSIST tick，避免原地打转"""
+def _wander_step(agent, grid, rng, wander_persist):
+    """无目标游荡：保持方向 wander_persist tick，避免原地打转"""
     world = grid.world
     if agent['wander_ticks'] <= 0:
         dirs = [(1, 0), (-1, 0), (0, 1), (0, -1),
                 (1, 1), (1, -1), (-1, 1), (-1, -1)]
         agent['wander_dx'], agent['wander_dy'] = dirs[int(rng.integers(0, 8))]
-        agent['wander_ticks'] = WANDER_PERSIST
+        agent['wander_ticks'] = wander_persist
     agent['wander_ticks'] -= 1
     world.move_agent(agent, agent['wander_dx'], agent['wander_dy'])
 

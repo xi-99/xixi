@@ -15,6 +15,8 @@ import time
 
 import numpy as np
 
+import evolution
+
 
 class WorldGrid:
     """网格包装：行为上等同 numpy 数组，另挂 .world 引用供插件取用内核工具。"""
@@ -61,6 +63,7 @@ class World:
         self.max_conservation_error = 0.0
         self.audit_fails = 0
         self.last_audit_total = 0.0
+        self.evolution_log = []          # 世代更替摘要（v2.0 基因纪元）
         self.plugins = plugins or []
         self.enabled = enabled or {name: True for name, _ in (plugins or [])}
         self._init_energy()
@@ -69,28 +72,38 @@ class World:
 
     # ===== 初始化 =====
 
-    # 食物分布常量（UI 无对应滑条，改这里即可）
+    # 食物分布默认值（config.py 合并后由 params 提供：
+    # oasis_count / oasis_radius / oasis_density / base_crumb_prob；
+    # 以下常量仅作旧参数记录（无这些 key）的兜底，保留旧 Web 行为）
     CLUSTER_COUNT = 3        # 高密度食物斑块（绿洲）数量
     CLUSTER_RADIUS = 6       # 斑块半径（格）
-    CLUSTER_BOOST = 5.0      # 斑块内能量倍数
+    CLUSTER_BOOST = 5.0      # 斑块内能量倍数（旧语义：food_energy × 倍数）
     BASE_DENSITY = 0.2       # 基底碎屑密度
 
     def _init_energy(self):
         """铺能量点：稀疏碎屑 + 高密度斑块（绿洲）。
-        斑块是"固定的绿洲"，碎屑是"沿途随机刷新的食物"。"""
+        斑块是"固定的绿洲"，碎屑是"沿途随机刷新的食物"。
+        v2.1：斑块数量/半径/密度与碎屑概率来自 params（config.py 合并）；
+        碎屑格能量 = food_energy；斑块每格能量 = oasis_density（config 语义）。"""
         size = self.size
         rng = self.rng
         f = float(self.params['food_energy'])
-        mask = rng.random((size, size)) < self.BASE_DENSITY
+        n_oasis = int(self.params.get('oasis_count', self.CLUSTER_COUNT))
+        r = int(self.params.get('oasis_radius', self.CLUSTER_RADIUS))
+        crumb_prob = float(self.params.get('base_crumb_prob', self.BASE_DENSITY))
+        if 'oasis_density' in self.params:
+            density = float(self.params['oasis_density'])
+        else:
+            density = f * self.CLUSTER_BOOST   # 旧记录兜底：food_energy × 倍数
+        mask = rng.random((size, size)) < crumb_prob
         self.grid.data[mask] = f
-        r = self.CLUSTER_RADIUS
-        for _ in range(self.CLUSTER_COUNT):
+        for _ in range(n_oasis):
             cx = int(rng.integers(0, size))
             cy = int(rng.integers(0, size))
             for dy in range(-r, r + 1):
                 for dx in range(-r, r + 1):
                     if max(abs(dx), abs(dy)) <= r:
-                        self.grid.data[(cy + dy) % size, (cx + dx) % size] += f * self.CLUSTER_BOOST
+                        self.grid.data[(cy + dy) % size, (cx + dx) % size] += density
 
     def _init_agents(self):
         n_prey = int(self.params['agent_count'])
@@ -104,6 +117,14 @@ class World:
     def _new_agent(self, aid, kind, hunger=None):
         if hunger is None:
             hunger = float(self.rng.uniform(30.0, 60.0)) if kind == 'predator' else 0.0
+        # v2.1：初始能量在 initial_energy_min/max（config 合并）间均匀取值；
+        # 旧参数记录无这两个 key 时回退 init_energy（旧行为）
+        emin = float(self.params.get('initial_energy_min', 0.0) or 0.0)
+        emax = float(self.params.get('initial_energy_max', 0.0) or 0.0)
+        if emax > emin:
+            init_e = float(self.rng.uniform(emin, emax))
+        else:
+            init_e = float(self.params['init_energy'])
         return {
             'id': aid,
             'kind': kind,
@@ -111,7 +132,7 @@ class World:
             'x': int(self.rng.integers(0, self.size)),
             'y': int(self.rng.integers(0, self.size)),
             'last_pos': None,
-            'energy': float(self.params['init_energy']),
+            'energy': float(init_e),
             'hp': float(self.params.get('prey_hp', 10.0)),
             'hunger': float(hunger),
             'attack_cooldown': 0,
@@ -123,6 +144,7 @@ class World:
             'switch_count': 0,
             'walked': 0,
             'eaten': 0,
+            'eaten_base': 0.0,        # 本世代进食基数（进化适应度用）
             'spent': 0,
             'walked_this_tick': False,
             'wander_dx': 0,
@@ -131,17 +153,39 @@ class World:
             'born_tick': 0,
             'death_tick': None,
             'death_cause': None,
+            'gen': 0,                    # 世代（v2.0 基因纪元；0 = 初代）
+            'genome': None,              # 数字基因：None = 无基因脑（硬编码模式）
         }
+        # v2.0：进化模式下，初代 prey 出生即携带随机本能（随机权重）
+        if kind == 'prey' and self.params.get('evolution_mode'):
+            agent['genome'] = evolution.random_genome(self.rng)
 
     # ===== 内核工具（插件调用）=====
 
     def move_agent(self, agent, dx, dy):
-        """坐标管理：环形边界移动一步，记录离开的格。"""
+        """坐标管理：环形边界移动一步，记录离开的格。
+        若 grid 上存在 terrain（地理隔离插件 geography）：
+          山脉（1）不可通行 → 拦截移动并返回 False；
+          河流（2）通行额外消耗 2 × move_cost，散落回起点格（守恒）。
+        返回 True=已移动 / False=被地形拦截。"""
+        nx = (agent['x'] + dx) % self.size
+        ny = (agent['y'] + dy) % self.size
+        terrain = getattr(self.grid, 'terrain', None)
+        if terrain is not None and (dx != 0 or dy != 0):
+            t = int(terrain[ny, nx])
+            if t == 1:
+                return False                      # 山脉不可通行
+            if t == 2:
+                extra = float(agent['params'].get('move_cost', 0.6)) * 2.0
+                agent['energy'] -= extra
+                agent['spent'] += extra
+                self.grid.data[agent['y'], agent['x']] += extra   # 守恒：回起点格
         agent['last_pos'] = (agent['x'], agent['y'])
-        agent['x'] = (agent['x'] + dx) % self.size
-        agent['y'] = (agent['y'] + dy) % self.size
+        agent['x'] = nx
+        agent['y'] = ny
         agent['walked_this_tick'] = True
         agent['walked'] += 1
+        return True
 
     def dist_xy(self, x1, y1, x2, y2):
         """环形网格切比雪夫距离"""
@@ -230,6 +274,18 @@ class World:
                 self.deaths.append({'tick': self.tick, 'id': a['id'],
                                     'kind': a['kind'], 'cause': a['death_cause'],
                                     'x': a['x'], 'y': a['y']})
+        # v2.0 基因纪元：进化模式下按世代间隔触发自然选择
+        if self.params.get('evolution_mode'):
+            gen_ticks = int(self.params.get('generation_ticks',
+                                            evolution.DEFAULT_GENERATION_TICKS))
+            if self.tick > 0 and self.tick % gen_ticks == 0:
+                try:
+                    self.evolution_log.append(evolution.turnover(self))
+                except Exception as e:
+                    # 进化引擎异常不允许打死世界：记录并降级为硬编码模式
+                    self.deaths.append({'tick': self.tick, 'kind': 'evolution',
+                                        'cause': f'进化引擎异常: {e}'})
+                    self.params['evolution_mode'] = False
         self.tick += 1
         if self.tick % 50 == 0:
             self.series.append((self.tick, len(self.alive_prey())))
@@ -271,6 +327,8 @@ class World:
             'grid_energy': float(self.grid.sum()),
             'conservation_error': self.max_conservation_error,
             'audit_fails': self.audit_fails,
+            'generation': (max((a.get('gen', 0) for a in prey), default=0)
+                           if prey else 0),
         }
 
     def death_causes(self):
