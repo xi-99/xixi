@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS experiments (
     move_cost      REAL NOT NULL,
     food_energy    REAL NOT NULL,
     view_range     INTEGER NOT NULL,
-    distract_prob  REAL NOT NULL,
+    hesitation_prob REAL NOT NULL,
     predator_count INTEGER NOT NULL,
     attack_power   INTEGER NOT NULL,
     hunger_threshold REAL NOT NULL,
@@ -54,6 +54,8 @@ def get_connection():
         conn.execute('ALTER TABLE experiments ADD COLUMN finish_reason TEXT')
     if 'source' not in cols:
         conn.execute('ALTER TABLE experiments ADD COLUMN source TEXT')
+    if 'hesitation_prob' not in cols:
+        conn.execute('ALTER TABLE experiments ADD COLUMN hesitation_prob REAL')
     if 'params_json' not in cols:
         conn.execute('ALTER TABLE experiments ADD COLUMN params_json TEXT')
     if 'deaths_json' not in cols:
@@ -79,7 +81,7 @@ def save_experiment(params, result):
         conn.execute(
             """INSERT INTO experiments
                (created_at, seed, map_size, agent_count, move_cost, food_energy,
-                view_range, distract_prob, predator_count, attack_power,
+                view_range, hesitation_prob, predator_count, attack_power,
                 hunger_threshold, max_ticks, end_tick, alive_final, survival_rate,
                 peak_alive, finish_reason, source, params_json, deaths_json,
                 diagnosis, series)
@@ -92,7 +94,7 @@ def save_experiment(params, result):
                 float(params.get('move_cost', 1.0)),
                 float(params.get('food_energy', 5.0)),
                 int(params.get('view_range', 10)),
-                float(params.get('distract_prob', 0.0)),
+                float(params.get('hesitation_prob', params.get('distract_prob', 0.0))),
                 int(params.get('predator_count', 0)),
                 int(params.get('attack_power', 3)),
                 float(params.get('hunger_threshold', 70.0)),
@@ -143,7 +145,7 @@ def load_experiments():
     try:
         rows = conn.execute(
             "SELECT id, created_at, seed, map_size, agent_count, move_cost, "
-            "food_energy, view_range, distract_prob, predator_count, attack_power, "
+            "food_energy, view_range, hesitation_prob, predator_count, attack_power, "
             "hunger_threshold, max_ticks, end_tick, alive_final, survival_rate, "
             "peak_alive, finish_reason, source, params_json, deaths_json, "
             "diagnosis, series "
@@ -159,7 +161,7 @@ def get_experiment(rid):
     try:
         row = conn.execute(
             "SELECT id, created_at, seed, map_size, agent_count, move_cost, "
-            "food_energy, view_range, distract_prob, predator_count, attack_power, "
+            "food_energy, view_range, hesitation_prob, predator_count, attack_power, "
             "hunger_threshold, max_ticks, end_tick, alive_final, survival_rate, "
             "peak_alive, finish_reason, source, params_json, deaths_json, "
             "diagnosis, series "

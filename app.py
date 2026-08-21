@@ -12,7 +12,6 @@ WORLD3/app.py —— 数字生命实验控制台（终极版）。
   - 实验模式二：自动调参扫描（顺序/随机扰动，散点图+趋势线+最优参数高亮）
   - SQLite 历史记录自动刷新（含终止原因），绿色高亮当前最优参数
   - 四段智能诊断（追加终止原因）
-  - DSH Token 用量统计
 """
 import json
 import os
@@ -75,9 +74,8 @@ PARAM_SPECS = {
                         '吃掉一个能量点获得的能量。', None),
     'view_range':      ('视野距离', 1, 50, 20, 1, int,
                         'Agent 能发现多远的食物/猎物。视野越大越容易做对决定。', None),
-    'distract_prob':   ('决心概率', 0.0, 1.0, 0.5, 0.01, float,
-                        '锁定目标后不中途变卦的概率。1 = 死磕到底（决心型）；'
-                        '0 = 每步都重新思考（犹豫型）。', 'focus'),
+    'hesitation_prob': ('犹豫概率', 0.0, 1.0, 0.5, 0.01, float,
+                        '0 = 死磕到底（决心型）；1 = 犹豫不决（走神型）。', 'focus'),
     'patch_radius':    ('猎场补位半径', 1, 10, 3, 1, int,
                         '目标被吃光时，此范围内换目标不算"重新决策"——同一片猎场。', 'focus'),
     'emergency_energy': ('危急阈值', 1, 50, 15, 1, int,
@@ -88,7 +86,7 @@ PARAM_SPECS = {
                          '捕食者饥饿值高于此值时主动猎杀；低于 30 则随机游走。', 'predator'),
 }
 
-SCAN_KEYS = ['distract_prob', 'move_cost', 'food_energy', 'view_range']
+SCAN_KEYS = ['hesitation_prob', 'move_cost', 'food_energy', 'view_range']
 
 DEFAULT_PARAMS = {
     'seed': 42,
@@ -97,7 +95,7 @@ DEFAULT_PARAMS = {
     'move_cost': 0.6,
     'food_energy': 10,
     'view_range': 20,
-    'distract_prob': 0.5,
+    'hesitation_prob': 0.5,
     'predator_enabled': True,
     'predator_count': 5,
     'attack_power': 3,
@@ -131,7 +129,7 @@ def init_state():
     ss.param_mode = '换代生效'
     ss.refresh_interval = 0.5          # 画面刷新：实时加载（0.5秒/帧）或关闭动画
     ss.exp_mode = '单次挂机跑'          # 实验模式
-    ss.scan_set = {'param': 'distract_prob', 'start': None, 'end': None,
+    ss.scan_set = {'param': 'hesitation_prob', 'start': None, 'end': None,
                    'step': None, 'random': False, 'n_random': 10}
     ss.realtime = False                # 参数提交模式：False=点【确定】统一生效
     ss.dialog_rid = None               # 详情弹窗：当前打开的实验 id（None=关闭）
@@ -807,7 +805,7 @@ def _detail_params(rec):
         ('能量消耗', p.get('move_cost', '—')),
         ('食物能量', p.get('food_energy', '—')),
         ('视野距离', p.get('view_range', '—')),
-        ('决心概率', p.get('distract_prob', '—')),
+        ('犹豫概率', p.get('hesitation_prob', p.get('distract_prob', '—'))),
         ('猎场补位半径', p.get('patch_radius', '—')),
         ('危急阈值', p.get('emergency_energy', '—')),
         ('捕食者初始数量', p.get('predator_count', '—')),
@@ -1119,7 +1117,7 @@ def render_controls():
 
         st.markdown('**世界参数**')
         pairs = [('map_size', 'agent_count'), ('predator_count', 'prey_hp'),
-                 ('move_cost', 'food_energy'), ('view_range', 'distract_prob'),
+                 ('move_cost', 'food_energy'), ('view_range', 'hesitation_prob'),
                  ('patch_radius', 'emergency_energy'), ('attack_power', 'hunger_threshold')]
         for k1, k2 in pairs:
             c1, c2 = st.columns(2)

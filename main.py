@@ -66,25 +66,29 @@ def run_once(p, seed, ticks, tag, verbose=False):
     if verbose:
         print(format_report(r))
         print(f" 耗时: {elapsed:.1f}s")
+    r['agents'] = world.agents   # 供 export_results 导出原始数据
     return r
 
 
-def verdict(committed, hesitant):
-    c_s = committed['survival']
-    h_s = hesitant['survival']
-    print()
-    print("=" * 62)
-    if c_s >= 0.7 and c_s - h_s >= 0.15:
-        print(" [通过] 实验结论：决心机制有效。")
-        print(f"    决心型存活 {c_s*100:.0f}%（达标 ≥70%），犹豫型仅 {h_s*100:.0f}%。")
-        print("    犹豫是死亡主因；'决心'让觅食收支越过临界点。")
-    elif c_s >= 0.7:
-        print(" [注意] 决心型达标，但对照差异不明显。")
-        print("    世界可能太富（犹豫也能活），调低 OASIS_DENSITY 或 BASE_CRUMB_PROB 再试。")
-    else:
-        print(" [未达标] 决心型未达标。")
-        print("    世界太贫或初期死亡率过高，调参方向见 README.md 调参指南。")
-    print("=" * 62)
+def export_results(agents, output_path="results.csv"):
+    """导出原始数据，让用户自行分析，不下结论"""
+    import csv
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(["agent_id", "energy", "switch_count",
+                         "walked", "eaten", "spent", "death_tick"])
+        for agent in agents:
+            writer.writerow([
+                getattr(agent, 'id', 0),
+                getattr(agent, 'energy', 0.0),
+                getattr(agent, 'switch_count', 0),
+                getattr(agent, 'walked', 0),
+                getattr(agent, 'eaten', 0.0),
+                getattr(agent, 'spent', 0.0),
+                getattr(agent, 'death_tick', None),
+            ])
+    print(f"✅ 原始实验数据已导出至 {output_path}")
+    print("💡 请用 Excel 或 Jupyter 自行分析，不要预设结论。")
 
 
 def mode_smoke(args):
@@ -122,7 +126,9 @@ def mode_compare(args):
     for a, b, c in rows:
         print(f" {a:<16}{b:<{w1}}{c:<{w2}}")
     print("=" * (w1 + w2 + 12))
-    verdict(committed, hesitant)
+    # 不下结论：导出两组的原始数据，由用户自行分析
+    export_results(hesitant['agents'], os.path.join(RESULTS, 'compare_hesitant.csv'))
+    export_results(committed['agents'], os.path.join(RESULTS, 'compare_committed.csv'))
 
 
 def mode_sweep(args):

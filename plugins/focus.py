@@ -32,7 +32,7 @@ def on_tick(agents, grid):
         # 出生时参数快照——换代生效
         p = a['params']
         view_range = int(p['view_range'])
-        distract_prob = float(p['distract_prob'])
+        distract_prob = float(p.get('hesitation_prob', p.get('distract_prob', 0.5)))
         emergency = float(p.get('emergency_energy', EMERGENCY_DEFAULT))
         patch_radius = int(p.get('patch_radius', 3))
         size = world.size

@@ -14,7 +14,6 @@ WORLD3/
 │                           #   python main.py --mode compare/sweep/single/smoke
 ├── tune.py                 # 参数窗口扫描器（可选）：
 │                           #   批量对比犹豫型 vs 决心型的存活率差距
-├── token_stats.py          # DSH 会话 Token 用量统计工具（备用，app 不调用）
 ├── config.py               # 命令行引擎的集中参数（main.py / tune.py / world.py 使用）
 ├── agent.py                # 命令行引擎的 Agent：感知 → 打分 → 决心决策 → 执行
 ├── world.py                # 命令行引擎的世界：网格、能量守恒审计、主循环
@@ -22,6 +21,10 @@ WORLD3/
 ├── data/                   # 实验历史数据包
 │   ├── init_db.py          # SQLite 初始化 / 保存 / 查询（含旧库自动兼容）
 │   └── __init__.py
+│
+├── tools/                  # 辅助工具（备用，app 不调用）
+│   └── archive/
+│       └── token_stats.py  # DSH 会话 Token 用量统计工具
 │
 ├── plugins/                # 插件目录（放入 .py 即被自动扫描加载）
 │   ├── metabolism.py       # 基础代谢：走路耗能、吃能量点、能量死亡判定
